@@ -109,11 +109,13 @@ function App() {
     createAttempt(payload)
       .then((res) => {
         setAttemptStatus('saved')
-        setAttemptMessage(res?.attempt?.id ? `attempt saved (${res.attempt.id})` : 'attempt saved')
+        setAttemptMessage(
+          res?.attempt?.id ? `Attempt saved (id: ${res.attempt.id})` : 'Attempt saved',
+        )
       })
       .catch((e) => {
         setAttemptStatus('failed')
-        setAttemptMessage(e?.message || 'save failed')
+        setAttemptMessage(e?.message ? `Save failed: ${e.message}` : 'Save failed')
       })
   }, [lesson, practice.results, practice.score, practice.state])
 
@@ -230,11 +232,11 @@ function App() {
 
         <div className="attemptStatus" role="status" aria-live="polite">
           {attemptStatus === 'saving' ? (
-            <span className="pill">saving…</span>
+            <span className="pill">Saving attempt…</span>
           ) : attemptStatus === 'saved' ? (
-            <span className="pill pillOn">{attemptMessage || 'attempt saved'}</span>
+            <span className="pill pillOn">{attemptMessage || 'Attempt saved'}</span>
           ) : attemptStatus === 'failed' ? (
-            <span className="pill">{attemptMessage || 'save failed'}</span>
+            <span className="pill">{attemptMessage || 'Save failed'}</span>
           ) : (
             <span className="hint"> </span>
           )}
@@ -341,9 +343,9 @@ function App() {
       </section>
 
       <section className="card" aria-labelledby="chord-title">
-        <h2 id="chord-title">Chord (Heuristic)</h2>
+        <h2 id="chord-title">Chord (Heuristic Inference)</h2>
         <p className="subtle">
-          Prototype chord inference from recent detected single notes (not true polyphonic DSP).
+          Prototype inference from recent detected notes (not true polyphonic DSP).
         </p>
         <div className="grid">
           <div className="row">
