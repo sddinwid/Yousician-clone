@@ -1,5 +1,6 @@
 import './App.css'
 import { usePitchDetector } from './hooks/usePitchDetector'
+import { useChordInference } from './hooks/useChordInference'
 
 function App() {
   const {
@@ -23,6 +24,8 @@ function App() {
     start,
     stop,
   } = usePitchDetector()
+
+  const chord = useChordInference(noteHistory)
 
   return (
     <main className="page">
@@ -147,6 +150,48 @@ function App() {
 
         <div className="errorArea" role="status" aria-live="polite">
           {error ? <div className="errorText">{error}</div> : <div className="hint"> </div>}
+        </div>
+      </section>
+
+      <section className="card" aria-labelledby="chord-title">
+        <h2 id="chord-title">Chord (Heuristic)</h2>
+        <p className="subtle">
+          Prototype chord inference from recent detected single notes (not true polyphonic DSP).
+        </p>
+        <div className="grid">
+          <div className="row">
+            <div className="label">Inferred Chord</div>
+            <div className="value">
+              <span className="mono">{chord.chord ?? '—'}</span>
+              <span className={`pill ${chord.state === 'stable' ? 'pillOn' : 'pillOff'}`}>
+                {chord.state}
+              </span>
+            </div>
+          </div>
+          <div className="row">
+            <div className="label">Chord Confidence</div>
+            <div className="value">
+              <div className="meter" aria-label="chord confidence">
+                <div
+                  className="meterFill"
+                  style={{ width: `${Math.round((chord.confidence ?? 0) * 100)}%` }}
+                />
+              </div>
+              <div className="meterText">{Math.round((chord.confidence ?? 0) * 100)}%</div>
+            </div>
+          </div>
+          <div className="row">
+            <div className="label">Note Window</div>
+            <div className="value">
+              <span className="mono">{(chord.usedWindow ?? []).slice(0, 10).join(', ') || '—'}</span>
+            </div>
+          </div>
+          <div className="row">
+            <div className="label">Window Age</div>
+            <div className="value">
+              <span className="mono">{chord.candidateAgeMs} ms</span>
+            </div>
+          </div>
         </div>
       </section>
     </main>
