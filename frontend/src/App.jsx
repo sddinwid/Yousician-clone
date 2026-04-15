@@ -1,9 +1,11 @@
 import './App.css'
 import { usePitchDetector } from './hooks/usePitchDetector'
 import { useChordInference } from './hooks/useChordInference'
-import { useMemo, useState } from 'react'
-import { getLessonById, LESSONS, formatTarget } from './features/practice/lessons'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { formatTarget } from './features/practice/lessons'
 import { usePractice } from './features/practice/usePractice'
+import { getLessons } from './api/lessons'
+import { createAttempt } from './api/attempts'
 
 function App() {
   const {
@@ -30,13 +32,90 @@ function App() {
 
   const chord = useChordInference(noteHistory)
 
-  const [lessonId, setLessonId] = useState(LESSONS[0].id)
-  const lesson = useMemo(() => getLessonById(lessonId), [lessonId])
+  const [lessons, setLessons] = useState([])
+  const [lessonsLoading, setLessonsLoading] = useState(true)
+  const [lessonsError, setLessonsError] = useState(null)
+
+  const [lessonId, setLessonId] = useState('')
+  const lesson = useMemo(
+    () => lessons.find((l) => l.id === lessonId) ?? lessons[0] ?? null,
+    [lessons, lessonId],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setLessonsLoading(true)
+      setLessonsError(null)
+      try {
+        const data = await getLessons()
+        if (cancelled) return
+        setLessons(Array.isArray(data) ? data : [])
+        setLessonId((prev) => prev || data?.[0]?.id || '')
+      } catch (e) {
+        if (cancelled) return
+        setLessons([])
+        setLessonId('')
+        setLessonsError(e?.message || 'Failed to load lessons.')
+      } finally {
+        if (!cancelled) setLessonsLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const practice = usePractice({
     lesson,
     stableNote: note,
     inferredChord: chord.chord,
   })
+
+  const [attemptStatus, setAttemptStatus] = useState('idle') // idle | saving | saved | failed
+  const [attemptMessage, setAttemptMessage] = useState('')
+  const sessionIdRef = useRef(0)
+  const savedSessionIdRef = useRef(-1)
+
+  const startPractice = () => {
+    sessionIdRef.current += 1
+    setAttemptStatus('idle')
+    setAttemptMessage('')
+    practice.start()
+  }
+
+  useEffect(() => {
+    if (practice.state !== 'completed') return
+    if (!lesson) return
+    if (savedSessionIdRef.current === sessionIdRef.current) return
+
+    savedSessionIdRef.current = sessionIdRef.current
+    setAttemptStatus('saving')
+    setAttemptMessage('')
+
+    const payload = {
+      lessonId: lesson.id,
+      completedAt: new Date().toISOString(),
+      score: {
+        correct: practice.score.correct,
+        missed: practice.score.missed,
+        completionPercentage: practice.score.percent,
+      },
+      targets: lesson.targets,
+      results: practice.results,
+    }
+
+    createAttempt(payload)
+      .then((res) => {
+        setAttemptStatus('saved')
+        setAttemptMessage(res?.attempt?.id ? `attempt saved (${res.attempt.id})` : 'attempt saved')
+      })
+      .catch((e) => {
+        setAttemptStatus('failed')
+        setAttemptMessage(e?.message || 'save failed')
+      })
+  }, [lesson, practice.results, practice.score, practice.state])
 
   return (
     <main className="page">
@@ -77,8 +156,9 @@ function App() {
               className="select"
               value={lessonId}
               onChange={(e) => setLessonId(e.target.value)}
+              disabled={lessonsLoading || !!lessonsError || lessons.length === 0}
             >
-              {LESSONS.map((l) => (
+              {lessons.map((l) => (
                 <option value={l.id} key={l.id}>
                   {l.title}
                 </option>
@@ -89,8 +169,8 @@ function App() {
             <button
               type="button"
               className="primaryButton"
-              onClick={practice.start}
-              disabled={practice.state === 'running'}
+              onClick={startPractice}
+              disabled={practice.state === 'running' || !lesson || !!lessonsError}
             >
               Start Practice
             </button>
@@ -102,8 +182,14 @@ function App() {
 
         <div className="practiceMeta">
           <div className="subtle">
-            <div className="mono">{lesson.title}</div>
-            <div>{lesson.description}</div>
+            <div className="mono">{lesson?.title ?? 'Lessons'}</div>
+            <div>
+              {lessonsLoading
+                ? 'Loading lessons…'
+                : lessonsError
+                  ? `Failed to load lessons: ${lessonsError}`
+                  : lesson?.description ?? '—'}
+            </div>
           </div>
           <div className="practiceSummary">
             <span className="pill">{practice.state}</span>
@@ -118,13 +204,13 @@ function App() {
           <div className="label">Active Target</div>
           <div className="value">
             <span className="mono">
-              {practice.activeTarget ? formatTarget(lesson, practice.activeTarget) : '—'}
+              {practice.activeTarget && lesson ? formatTarget(lesson, practice.activeTarget) : '—'}
             </span>
           </div>
         </div>
 
         <div className="timeline">
-          {lesson.targets.map((t, idx) => {
+          {(lesson?.targets ?? []).map((t, idx) => {
             const statusClass = practice.results[idx] ?? 'pending'
             const isActive = idx === practice.activeIndex && practice.state === 'running'
             const cls = `timelineItem ${statusClass} ${isActive ? 'active' : ''}`
@@ -141,6 +227,18 @@ function App() {
           Matching is intentionally simple: notes match the stable detected note; chords match the
           inferred chord.
         </p>
+
+        <div className="attemptStatus" role="status" aria-live="polite">
+          {attemptStatus === 'saving' ? (
+            <span className="pill">saving…</span>
+          ) : attemptStatus === 'saved' ? (
+            <span className="pill pillOn">{attemptMessage || 'attempt saved'}</span>
+          ) : attemptStatus === 'failed' ? (
+            <span className="pill">{attemptMessage || 'save failed'}</span>
+          ) : (
+            <span className="hint"> </span>
+          )}
+        </div>
       </section>
 
       <section className="card" aria-labelledby="audio-feedback-title">
