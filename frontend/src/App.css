@@ -276,6 +276,11 @@
   color: #64748b;
 }
 
+.attemptStatus {
+  margin-top: 10px;
+  min-height: 22px;
+}
+
 .errorText {
   color: #b91c1c;
   font-size: 13px;
