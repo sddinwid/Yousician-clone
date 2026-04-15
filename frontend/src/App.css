@@ -145,6 +145,16 @@
   border-top: 1px solid #e2e8f0;
 }
 
+.practiceChordControls {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
 .timeline {
   margin-top: 12px;
   display: grid;

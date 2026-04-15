@@ -293,6 +293,16 @@ export function usePractice({
     advanceOnce('missed', activeKeyRef.current)
   }, [advanceOnce, state])
 
+  const markCorrect = useCallback(() => {
+    if (state !== 'running') return
+    advanceOnce('correct', activeKeyRef.current)
+  }, [advanceOnce, state])
+
+  const markMissed = useCallback(() => {
+    if (state !== 'running') return
+    advanceOnce('missed', activeKeyRef.current)
+  }, [advanceOnce, state])
+
   // Reset when lesson changes.
   useEffect(() => {
     restart()
@@ -487,6 +497,8 @@ export function usePractice({
     start,
     restart,
     nextTarget,
+    markCorrect,
+    markMissed,
     manualAdvance,
     setManualAdvance,
     timeoutEnabled,

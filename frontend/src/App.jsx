@@ -252,6 +252,42 @@ function App() {
           </div>
         </div>
 
+        {lesson?.mode === 'chord' ? (
+          <div className="practiceChordControls">
+            <div className="label">Chord Demo Controls</div>
+            <div className="controls">
+              <button
+                type="button"
+                className="primaryButton"
+                onClick={practice.markCorrect}
+                disabled={practice.state !== 'running'}
+              >
+                Mark Correct
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={practice.markMissed}
+                disabled={practice.state !== 'running'}
+              >
+                Mark Missed
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={practice.nextTarget}
+                disabled={practice.state !== 'running'}
+              >
+                Next Target
+              </button>
+            </div>
+            <p className="subtle">
+              Chord inference is heuristic; automatic matching is enabled, but use these controls as
+              a fallback during live demos.
+            </p>
+          </div>
+        ) : null}
+
         <div className="practiceDebug">
           <div className="label">Practice Debug</div>
           <div className="grid">
