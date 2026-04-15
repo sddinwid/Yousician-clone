@@ -140,7 +140,15 @@ function isMatch(
   target,
   stableNote,
   inferredChord,
-  { allowPitchClassFallback = true, allowSemitoneTolerance = false, semitoneTolerance = 1 } = {},
+  inferredChordConfidence,
+  inferredChordState,
+  {
+    allowPitchClassFallback = true,
+    allowSemitoneTolerance = false,
+    semitoneTolerance = 1,
+    minChordConfidenceToMatch = 0.55,
+    allowFormingChordMatch = true,
+  } = {},
 ) {
   if (!lesson || target == null) return false
 
@@ -151,7 +159,13 @@ function isMatch(
       semitoneTolerance,
     }).ok
   }
-  if (lesson.mode === 'chord') return matchChord(target, inferredChord).ok
+  if (lesson.mode === 'chord') {
+    const labelOk = matchChord(target, inferredChord).ok
+    if (!labelOk) return false
+    const confOk = (inferredChordConfidence ?? 0) >= minChordConfidenceToMatch
+    const stateOk = inferredChordState === 'stable' || (allowFormingChordMatch && inferredChordState === 'forming')
+    return confOk || stateOk
+  }
 
   if (lesson.mode === 'mixed') {
     if (target.type === 'note') {
@@ -161,7 +175,13 @@ function isMatch(
         semitoneTolerance,
       }).ok
     }
-    if (target.type === 'chord') return matchChord(target.value, inferredChord).ok
+    if (target.type === 'chord') {
+      const labelOk = matchChord(target.value, inferredChord).ok
+      if (!labelOk) return false
+      const confOk = (inferredChordConfidence ?? 0) >= minChordConfidenceToMatch
+      const stateOk = inferredChordState === 'stable' || (allowFormingChordMatch && inferredChordState === 'forming')
+      return confOk || stateOk
+    }
   }
 
   return false
@@ -171,9 +191,13 @@ export function usePractice({
   lesson,
   stableNote,
   inferredChord,
+  inferredChordConfidence = 0,
+  inferredChordState = 'none',
   allowPitchClassFallback = true,
   allowSemitoneTolerance = true,
   semitoneTolerance = 1,
+  minChordConfidenceToMatch = 0.55,
+  allowFormingChordMatch = true,
 }) {
   const [state, setState] = useState('idle') // idle | running | completed
   const [activeIndex, setActiveIndex] = useState(0)
@@ -340,10 +364,19 @@ export function usePractice({
     const target = getTargetAt(lesson, activeIndex)
     if (!target) return
     if (
-      isMatch(lesson, target, stableNote, inferredChord, {
+      isMatch(
+        lesson,
+        target,
+        stableNote,
+        inferredChord,
+        inferredChordConfidence,
+        inferredChordState,
+        {
         allowPitchClassFallback,
         allowSemitoneTolerance,
         semitoneTolerance,
+        minChordConfidenceToMatch,
+        allowFormingChordMatch,
       })
     ) {
       advanceOnce('correct', activeKeyRef.current)
@@ -353,8 +386,12 @@ export function usePractice({
     advanceOnce,
     allowPitchClassFallback,
     allowSemitoneTolerance,
+    allowFormingChordMatch,
     inferredChord,
+    inferredChordConfidence,
+    inferredChordState,
     lesson,
+    minChordConfidenceToMatch,
     semitoneTolerance,
     stableNote,
     state,
@@ -384,7 +421,15 @@ export function usePractice({
     else if (expectedType === 'note' && !stableNote) reason = 'waiting-stable-note'
     else if (expectedType === 'chord' && !inferredChord) reason = 'waiting-inferred-chord'
     else if (expectedType === 'note' && !noteRes.ok) reason = `note-mismatch (${noteRes.method})`
-    else if (expectedType === 'chord' && !chordRes.ok) reason = 'chord-mismatch'
+    else if (expectedType === 'chord') {
+      if (!chordRes.ok) reason = 'chord-mismatch'
+      else if ((inferredChordConfidence ?? 0) < minChordConfidenceToMatch) reason = 'chord-low-confidence'
+      else if (
+        inferredChordState !== 'stable' &&
+        !(allowFormingChordMatch && inferredChordState === 'forming')
+      )
+        reason = 'chord-state'
+    }
 
     return {
       lessonMode: lesson?.mode ?? '—',
@@ -392,6 +437,8 @@ export function usePractice({
       expected: expectedLabel,
       stableNote: stableNote ?? null,
       inferredChord: inferredChord ?? null,
+      inferredChordConfidence,
+      inferredChordState,
       noteMatch: noteRes.ok,
       noteMatchMethod: noteRes.method,
       chordMatch: chordRes.ok,
@@ -407,9 +454,13 @@ export function usePractice({
     activeTarget,
     allowPitchClassFallback,
     allowSemitoneTolerance,
+    allowFormingChordMatch,
     inferredChord,
+    inferredChordConfidence,
+    inferredChordState,
     lesson,
     manualAdvance,
+    minChordConfidenceToMatch,
     semitoneTolerance,
     stableNote,
     state,

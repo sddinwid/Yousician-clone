@@ -36,17 +36,22 @@ function clamp01(x) {
  * Pragmatic chord inference from a rolling note history:
  * - Normalize notes to pitch classes.
  * - Build a recency-weighted pitch-class histogram.
- * - Score each known open chord by coverage minus extra-tone penalty.
+ * - Score each known open chord with guitar-friendly heuristics:
+ *   - strongly reward root + at least one other chord tone
+ *   - tolerate missing a tone (strums are messy; we may not observe all triad tones)
+ *   - penalize extra tones lightly (laptop mics + harmonic content can add spurious notes)
  */
 export function inferOpenChordFromHistory(
   noteHistory,
   {
-    windowMs = 2500,
-    maxNotes = 14,
-    halfLifeMs = 900,
-    minPitchClassWeight = 0.12,
-    extraPenaltyPerTone = 0.12,
-    rootBonus = 0.06,
+    windowMs = 3200,
+    maxNotes = 18,
+    halfLifeMs = 700,
+    minPitchClassWeight = 0.08,
+    extraPenaltyPerTone = 0.07,
+    rootBonus = 0.12,
+    twoToneBonus = 0.12,
+    subsetBonus = 0.08,
   } = {},
 ) {
   const now = Date.now()
@@ -61,6 +66,8 @@ export function inferOpenChordFromHistory(
       usedWindow: [],
       pitchClassWeights: {},
       best: null,
+      candidates: [],
+      presentPitchClasses: [],
     }
   }
 
@@ -78,22 +85,44 @@ export function inferOpenChordFromHistory(
     .map(([pc]) => pc)
 
   const scoreChord = (tpl) => {
-    const required = tpl.tones
-    const presentRequired = required.filter((pc) => (weights[pc] ?? 0) >= minPitchClassWeight)
-    const coverage = presentRequired.length / required.length
+    const [root, third, fifth] = tpl.tones
+    const rootW = weights[root] ?? 0
+    const thirdW = weights[third] ?? 0
+    const fifthW = weights[fifth] ?? 0
 
-    const extras = presentPitchClasses.filter((pc) => !required.includes(pc))
+    const rootPresent = rootW >= minPitchClassWeight
+    const thirdPresent = thirdW >= minPitchClassWeight
+    const fifthPresent = fifthW >= minPitchClassWeight
+
+    const presentRequired = [rootPresent && root, thirdPresent && third, fifthPresent && fifth].filter(Boolean)
+    const requiredCount = presentRequired.length
+
+    const extras = presentPitchClasses.filter((pc) => !tpl.tones.includes(pc))
     const penalty = clamp01(extras.length * extraPenaltyPerTone)
 
-    let score = clamp01(coverage - penalty)
-    if ((weights[tpl.root] ?? 0) >= minPitchClassWeight) score = clamp01(score + rootBonus)
+    // Weighted coverage: root matters most for open-chord identification.
+    const coverageScore =
+      clamp01(
+        (rootPresent ? 0.48 : 0) +
+          (thirdPresent ? 0.28 : 0) +
+          (fifthPresent ? 0.24 : 0),
+      )
+
+    let score = clamp01(coverageScore - penalty)
+
+    if (rootPresent) score = clamp01(score + rootBonus)
+    if (requiredCount >= 2) score = clamp01(score + twoToneBonus)
+
+    // If the observed pitch classes are mostly a subset of the chord tones, bump it slightly.
+    if (presentPitchClasses.length > 0 && extras.length === 0) score = clamp01(score + subsetBonus)
 
     return {
       name: tpl.name,
       score,
-      coverage,
+      coverage: requiredCount / 3,
       presentRequired,
       extras,
+      rootPresent,
     }
   }
 
@@ -105,11 +134,12 @@ export function inferOpenChordFromHistory(
 
   const best = scored[0]
   return {
-    chord: best?.score > 0 ? best.name : null,
+    chord: best?.score >= 0.25 ? best.name : null,
     confidence: best?.score ?? 0,
     usedWindow: recent.map((h) => h.note),
     pitchClassWeights: weights,
     best,
+    candidates: scored.slice(0, 3),
+    presentPitchClasses,
   }
 }
-
