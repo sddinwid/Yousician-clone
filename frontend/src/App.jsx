@@ -1,6 +1,9 @@
 import './App.css'
 import { usePitchDetector } from './hooks/usePitchDetector'
 import { useChordInference } from './hooks/useChordInference'
+import { useMemo, useState } from 'react'
+import { getLessonById, LESSONS, formatTarget } from './features/practice/lessons'
+import { usePractice } from './features/practice/usePractice'
 
 function App() {
   const {
@@ -26,6 +29,14 @@ function App() {
   } = usePitchDetector()
 
   const chord = useChordInference(noteHistory)
+
+  const [lessonId, setLessonId] = useState(LESSONS[0].id)
+  const lesson = useMemo(() => getLessonById(lessonId), [lessonId])
+  const practice = usePractice({
+    lesson,
+    stableNote: note,
+    inferredChord: chord.chord,
+  })
 
   return (
     <main className="page">
@@ -53,6 +64,84 @@ function App() {
           </button>
         </div>
       </header>
+
+      <section className="card" aria-labelledby="practice-title">
+        <h2 id="practice-title">Practice</h2>
+        <div className="practiceTop">
+          <div className="practiceSelect">
+            <label className="label" htmlFor="lesson-select">
+              Lesson
+            </label>
+            <select
+              id="lesson-select"
+              className="select"
+              value={lessonId}
+              onChange={(e) => setLessonId(e.target.value)}
+            >
+              {LESSONS.map((l) => (
+                <option value={l.id} key={l.id}>
+                  {l.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="practiceButtons">
+            <button
+              type="button"
+              className="primaryButton"
+              onClick={practice.start}
+              disabled={practice.state === 'running'}
+            >
+              Start Practice
+            </button>
+            <button type="button" className="button" onClick={practice.restart}>
+              Restart
+            </button>
+          </div>
+        </div>
+
+        <div className="practiceMeta">
+          <div className="subtle">
+            <div className="mono">{lesson.title}</div>
+            <div>{lesson.description}</div>
+          </div>
+          <div className="practiceSummary">
+            <span className="pill">{practice.state}</span>
+            <span className="mono">
+              {practice.score.correct} correct / {practice.score.missed} missed (
+              {practice.score.percent}%)
+            </span>
+          </div>
+        </div>
+
+        <div className="practiceActive">
+          <div className="label">Active Target</div>
+          <div className="value">
+            <span className="mono">
+              {practice.activeTarget ? formatTarget(lesson, practice.activeTarget) : '—'}
+            </span>
+          </div>
+        </div>
+
+        <div className="timeline">
+          {lesson.targets.map((t, idx) => {
+            const statusClass = practice.results[idx] ?? 'pending'
+            const isActive = idx === practice.activeIndex && practice.state === 'running'
+            const cls = `timelineItem ${statusClass} ${isActive ? 'active' : ''}`
+            return (
+              <div className={cls} key={`${lesson.id}-${idx}`}>
+                <div className="timelineIdx">{idx + 1}</div>
+                <div className="timelineText mono">{formatTarget(lesson, t)}</div>
+              </div>
+            )
+          })}
+        </div>
+
+        <p className="subtle">
+          Matching is intentionally simple: notes match the stable detected note; chords match the
+          inferred chord.
+        </p>
+      </section>
 
       <section className="card" aria-labelledby="audio-feedback-title">
         <h2 id="audio-feedback-title">Audio Feedback</h2>
