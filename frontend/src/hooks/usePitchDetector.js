@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { detectPitchAutocorrelation } from '../audio/autocorrelationPitch'
+import { createPitchEstimator } from '../audio/pitchEstimator'
 import { frequencyToMidi, midiToFrequency, midiToNoteName } from '../audio/note'
 
 const DEFAULTS = {
@@ -63,6 +63,7 @@ export function usePitchDetector(options = {}) {
   const streamRef = useRef(null)
   const rafRef = useRef(0)
   const bufferRef = useRef(null)
+  const estimatorRef = useRef(null)
 
   const smoothedMidiRef = useRef(null)
   const displayedMidiRef = useRef(null)
@@ -97,6 +98,7 @@ export function usePitchDetector(options = {}) {
     setBlockReason('none')
     setAcceptMethod('none')
     lastAnalysisAtRef.current = 0
+    estimatorRef.current = null
   }, [])
 
   const stop = useCallback(async () => {
@@ -174,27 +176,26 @@ export function usePitchDetector(options = {}) {
       sourceRef.current = source
       analyserRef.current = analyser
       bufferRef.current = new Float32Array(analyser.fftSize)
+      estimatorRef.current = createPitchEstimator(analyser.fftSize)
 
       setIsListening(true)
       setStatus('listening')
 
       const nowMs = () => performance.now()
 
-      const maybeOctaveCorrect = (frequency, smoothedFrequency) => {
-        if (!frequency || !smoothedFrequency) return frequency
-
-        // If autocorrelation locks onto a strong harmonic, it often shows up as ~2x or ~0.5x.
-        if (frequency > smoothedFrequency * 1.9 && frequency < smoothedFrequency * 2.1) return frequency / 2
-        if (frequency * 2 > smoothedFrequency * 1.9 && frequency * 2 < smoothedFrequency * 2.1) return frequency * 2
-        return frequency
+      const rms = (signal) => {
+        let sum = 0
+        for (let i = 0; i < signal.length; i++) sum += signal[i] * signal[i]
+        return Math.sqrt(sum / signal.length)
       }
 
       const tick = () => {
         const ctx = audioContextRef.current
         const an = analyserRef.current
         const buf = bufferRef.current
+        const estimator = estimatorRef.current
 
-        if (!ctx || !an || !buf) return
+        if (!ctx || !an || !buf || !estimator) return
 
         const t = nowMs()
         if (t - lastAnalysisAtRef.current < opts.analysisIntervalMs) {
@@ -204,13 +205,16 @@ export function usePitchDetector(options = {}) {
         lastAnalysisAtRef.current = t
 
         an.getFloatTimeDomainData(buf)
-        const { frequencyHz: f, clarity, rms, subharmonicCorrected } = detectPitchAutocorrelation(
-          buf,
-          ctx.sampleRate,
-          opts,
-        )
+        const { frequencyHz: estimateHz, clarity } = estimator(buf, ctx.sampleRate)
+        const signalRms = rms(buf)
+        const f =
+          estimateHz &&
+          estimateHz >= opts.minFrequencyHz &&
+          estimateHz <= opts.maxFrequencyHz
+            ? estimateHz
+            : null
 
-        const signalNorm = Math.max(0, Math.min(1, rms / 0.2)) // UI-only normalization
+        const signalNorm = Math.max(0, Math.min(1, signalRms / 0.2)) // UI-only normalization
         setSignal(signalNorm)
         setConfidence(clarity)
         setRawFrequencyHz(f ? Math.round(f * 10) / 10 : null)
@@ -224,9 +228,7 @@ export function usePitchDetector(options = {}) {
         if (hasStableInput) lastStableAtRef.current = t
 
         const prevSmoothedMidi = smoothedMidiRef.current
-        const prevSmoothedHz = prevSmoothedMidi != null ? midiToFrequency(prevSmoothedMidi) : null
-        const corrected = f ? maybeOctaveCorrect(f, prevSmoothedHz) : null
-        const octaveCorrectionApplied = corrected && f && Math.abs(corrected - f) / f > 0.35
+        const corrected = f
 
         const displayedMidi = displayedMidiRef.current
         const correctedMidi = corrected ? frequencyToMidi(corrected) : null
@@ -236,8 +238,7 @@ export function usePitchDetector(options = {}) {
           correctedMidi < displayedMidi - opts.downJumpGuardSemitones
 
         const flags = []
-        if (subharmonicCorrected) flags.push('subharmonic')
-        if (octaveCorrectionApplied) flags.push('octave')
+        flags.push('pitchy')
         if (isDownJumpRisk) flags.push('down-jump-risk')
 
         // Always let the smoothed pitch track stable input; guards apply when committing stable notes.
