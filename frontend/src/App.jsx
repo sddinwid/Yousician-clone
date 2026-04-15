@@ -71,6 +71,9 @@ function App() {
     lesson,
     stableNote: note,
     inferredChord: chord.chord,
+    allowPitchClassFallback: true,
+    allowSemitoneTolerance: true,
+    semitoneTolerance: 1,
   })
 
   const [attemptStatus, setAttemptStatus] = useState('idle') // idle | saving | saved | failed
@@ -176,10 +179,39 @@ function App() {
             >
               Start Practice
             </button>
+            <button
+              type="button"
+              className="button"
+              onClick={practice.nextTarget}
+              disabled={practice.state !== 'running' || !lesson}
+            >
+              Next Target
+            </button>
             <button type="button" className="button" onClick={practice.restart}>
               Restart
             </button>
           </div>
+        </div>
+
+        <div className="practiceControls">
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={practice.manualAdvance}
+              onChange={(e) => practice.setManualAdvance(e.target.checked)}
+              disabled={!lesson}
+            />
+            Manual advance
+          </label>
+          <label className={`toggle ${practice.manualAdvance ? 'toggleDisabled' : ''}`}>
+            <input
+              type="checkbox"
+              checked={practice.timeoutEnabled}
+              onChange={(e) => practice.setTimeoutEnabled(e.target.checked)}
+              disabled={!lesson || practice.manualAdvance}
+            />
+            Timeout enabled
+          </label>
         </div>
 
         <div className="practiceMeta">
@@ -205,9 +237,74 @@ function App() {
         <div className="practiceActive">
           <div className="label">Active Target</div>
           <div className="value">
+            <span className="pill">
+              Target {practice.activeIndex + 1} of {practice.score.total || 0}
+            </span>
+            <span className="pill">
+              Previous:{' '}
+              {practice.activeIndex > 0 ? practice.results[practice.activeIndex - 1] : '—'}
+            </span>
             <span className="mono">
               {practice.activeTarget && lesson ? formatTarget(lesson, practice.activeTarget) : '—'}
             </span>
+          </div>
+        </div>
+
+        <div className="practiceDebug">
+          <div className="label">Practice Debug</div>
+          <div className="grid">
+            <div className="row">
+              <div className="label">Lesson Mode</div>
+              <div className="value">
+                <span className="mono">{practice.debug.lessonMode}</span>
+              </div>
+            </div>
+            <div className="row">
+              <div className="label">Expected</div>
+              <div className="value">
+                <span className="mono">{practice.debug.expected ?? '—'}</span>
+              </div>
+            </div>
+            <div className="row">
+              <div className="label">Stable Note</div>
+              <div className="value">
+                <span className="mono">{practice.debug.stableNote ?? '—'}</span>
+                <span className="pill">
+                  noteMatch: {practice.debug.noteMatch ? 'true' : 'false'} (mode:{' '}
+                  {practice.debug.noteMatchMethod ?? 'false'})
+                </span>
+              </div>
+            </div>
+            <div className="row">
+              <div className="label">Inferred Chord</div>
+              <div className="value">
+                <span className="mono">{practice.debug.inferredChord ?? '—'}</span>
+                <span className="pill">
+                  chordMatch: {practice.debug.chordMatch ? 'true' : 'false'}
+                </span>
+              </div>
+            </div>
+            <div className="row">
+              <div className="label">Not Accepted</div>
+              <div className="value">
+                <span className="mono">{practice.debug.reason}</span>
+              </div>
+            </div>
+            <div className="row">
+              <div className="label">Timing</div>
+              <div className="value">
+                <span className="pill">index: {practice.debug.activeIndex + 1}/{practice.debug.total}</span>
+                <span className="pill">
+                  timeout: {practice.debug.timeoutEnabled ? 'on' : 'off'}
+                </span>
+                <span className="pill">
+                  remaining:{' '}
+                  {typeof practice.debug.timeRemainingMs === 'number'
+                    ? `${Math.ceil(practice.debug.timeRemainingMs / 1000)}s`
+                    : '—'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
