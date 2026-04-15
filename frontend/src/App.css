@@ -96,6 +96,25 @@
   flex-wrap: wrap;
 }
 
+.practiceControls {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #334155;
+}
+
+.toggleDisabled {
+  opacity: 0.6;
+}
+
 .practiceMeta {
   margin-top: 12px;
   display: flex;
@@ -116,6 +135,14 @@
   margin-top: 12px;
   display: grid;
   gap: 6px;
+}
+
+.practiceDebug {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .timeline {
