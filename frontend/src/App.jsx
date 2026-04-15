@@ -71,6 +71,8 @@ function App() {
     lesson,
     stableNote: note,
     inferredChord: chord.chord,
+    inferredChordConfidence: chord.confidence ?? 0,
+    inferredChordState: chord.state,
     allowPitchClassFallback: true,
     allowSemitoneTolerance: true,
     semitoneTolerance: 1,
@@ -282,6 +284,10 @@ function App() {
                 <span className="pill">
                   chordMatch: {practice.debug.chordMatch ? 'true' : 'false'}
                 </span>
+                <span className="pill">
+                  conf: {Math.round((practice.debug.inferredChordConfidence ?? 0) * 100)}%
+                </span>
+                <span className="pill">state: {practice.debug.inferredChordState ?? '—'}</span>
               </div>
             </div>
             <div className="row">
@@ -470,6 +476,23 @@ function App() {
             <div className="label">Note Window</div>
             <div className="value">
               <span className="mono">{(chord.usedWindow ?? []).slice(0, 10).join(', ') || '—'}</span>
+            </div>
+          </div>
+          <div className="row">
+            <div className="label">Pitch Classes</div>
+            <div className="value">
+              <span className="mono">{(chord.presentPitchClasses ?? []).join(', ') || '—'}</span>
+            </div>
+          </div>
+          <div className="row">
+            <div className="label">Top Candidates</div>
+            <div className="value">
+              <span className="mono">
+                {(chord.candidates ?? [])
+                  .slice(0, 3)
+                  .map((c) => `${c.name}:${Math.round(c.score * 100)}%`)
+                  .join('  ') || '—'}
+              </span>
             </div>
           </div>
           <div className="row">

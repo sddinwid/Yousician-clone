@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { inferOpenChordFromHistory } from '../audio/chord'
 
 const DEFAULTS = {
-  windowMs: 2500,
-  maxNotes: 14,
-  minConfidenceToDisplay: 0.55,
+  windowMs: 3200,
+  maxNotes: 18,
+  minConfidenceToDisplay: 0.45,
   commitDebounceMs: 260,
   holdMs: 700,
 }
@@ -78,8 +78,9 @@ export function useChordInference(noteHistory, options = {}) {
     chord: stableChord ?? inference.chord,
     confidence: stableChord ? stableConfidence : inference.confidence,
     usedWindow: inference.usedWindow,
+    presentPitchClasses: inference.presentPitchClasses,
+    candidates: inference.candidates,
     state,
     candidateAgeMs,
   }
 }
-
